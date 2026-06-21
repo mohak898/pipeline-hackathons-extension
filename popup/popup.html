@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=360" />
+  <title>Hackathon Pipeline Tracker</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <!-- Header -->
+  <header class="header">
+    <div class="header__brand">
+      <img src="../icons/icon-48.png" alt="HPT" class="header__icon" />
+      <div>
+        <h1 class="header__title">Pipeline Tracker</h1>
+        <p class="header__subtitle">Hackathon deadlines, auto-tracked</p>
+      </div>
+    </div>
+  </header>
+
+  <!-- Event List -->
+  <main class="main">
+    <div id="event-list" class="event-list">
+      <!-- Populated by popup.js -->
+    </div>
+
+    <!-- Empty State -->
+    <div id="empty-state" class="empty-state" style="display: none;">
+      <div class="empty-state__icon">📡</div>
+      <p class="empty-state__text">No hackathons tracked yet.</p>
+      <p class="empty-state__hint">Visit a <strong>Devfolio</strong>, <strong>Devpost</strong>, or <strong>Unstop</strong> hackathon page to start tracking.</p>
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <button id="btn-share" class="btn btn--primary" title="Generate a share link for your team">
+      <span class="btn__icon">🔗</span> Share Timeline
+    </button>
+    <button id="btn-clear" class="btn btn--ghost" title="Clear all tracked events">
+      Clear All
+    </button>
+  </footer>
+
+  <!-- Toast -->
+  <div id="toast" class="toast" aria-live="polite"></div>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

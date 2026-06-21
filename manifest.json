@@ -1,0 +1,54 @@
+{
+  "manifest_version": 3,
+  "name": "Hackathon Pipeline Tracker",
+  "description": "Automatically tracks hackathon deadlines from Devfolio, Devpost & Unstop. Share timelines with your team.",
+  "version": "0.5.0",
+
+  "permissions": [
+    "alarms",
+    "notifications",
+    "storage"
+  ],
+
+  "background": {
+    "service_worker": "background/service-worker.js",
+    "type": "module"
+  },
+
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.devfolio.co/*",
+        "*://*.devpost.com/*",
+        "*://*.unstop.com/*"
+      ],
+      "js": ["content/network-hook.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": [
+        "*://*.devfolio.co/*",
+        "*://*.devpost.com/*",
+        "*://*.unstop.com/*"
+      ],
+      "js": ["content/extractor.js"],
+      "run_at": "document_idle"
+    }
+  ],
+
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
+  },
+
+  "icons": {
+    "16": "icons/icon-16.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  }
+}
