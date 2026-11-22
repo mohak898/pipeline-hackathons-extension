@@ -1,12 +1,11 @@
 {
-  "name": "Hackathon Pipeline Tracker",
-  "short_name": "Pipeline Tracker",
-  "description": "Track hackathon deadlines and share timelines with your team.",
+  "name": "Pipeline — Hackathon Team Workspace",
+  "short_name": "Pipeline",
+  "description": "Your team’s hackathon pipeline, deadlines and projects.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#000000",
-  "theme_color": "#7c3aed",
-  "orientation": "portrait",
+  "background_color": "#0b0d10",
+  "theme_color": "#0b0d10",
   "icons": [
     {
       "src": "/icon-192.png",

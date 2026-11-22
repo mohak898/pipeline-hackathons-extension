@@ -1,259 +1,171 @@
 /**
- * Network Rules — Platform Response Parsers (Passive-Only)
- * ---------------------------------------------------------
- * Contains ONLY parsers and detection logic. No API URL patterns or
- * proactive fetch constructors — the extension never calls fetch()
- * to any hackathon platform.
+ * Network Rules — platform response parsers (passive-only, v1.0)
+ * ---------------------------------------------------------------
+ * Turns JSON that a platform's own frontend downloaded into a hackathon
+ * draft. The extension never calls these APIs itself.
  *
- * Parsers are *greedy*: they try many possible field names because
- * these internal APIs are undocumented and may change.
+ * Why the rewrite: v0.5 returned the FIRST object with a name + date. On a
+ * detail page that is often a "related/recommended hackathons" response, so
+ * the wrong event got saved under the page URL. Now every candidate object
+ * is scored against the page's canonical id / slug and we only accept a
+ * confident match.
  */
 
-/* ================================================================== */
-/*  DEVFOLIO                                                          */
-/* ================================================================== */
-const devfolio = {
-  name: 'Devfolio',
+import { canonicalKey, detectPlatform as detectAny, nameTokens, slugHint, toIso } from '../utils/shared/canonical.js';
 
-  parseResponse(json, pageUrl) {
-    const candidates = gatherCandidates(json);
-
-    for (const h of candidates) {
-      const name = first(h, 'name', 'title', 'hackathon_name');
-      const startTime = first(h, 'starts_at', 'start_date', 'startDate', 'start_time');
-      const endTime = first(
-        h,
-        'ends_at', 'end_date', 'endDate', 'end_time',
-        'submission_deadline', 'deadline',
-      );
-      if (name && startTime && endTime) {
-        return mkEvent(name, startTime, endTime, pageUrl, 'devfolio');
-      }
-    }
-    return null;
+const FIELDS = {
+  devfolio: {
+    name: ['name', 'title', 'hackathon_name'],
+    slug: ['slug', 'subdomain'],
+    start: ['starts_at', 'start_date', 'startDate', 'start_time'],
+    end: ['ends_at', 'end_date', 'endDate', 'end_time'],
+    regEnd: ['reg_ends_at', 'application_deadline', 'applications_close_at', 'registration_deadline'],
+    subEnd: ['submission_deadline', 'submissions_close_at', 'project_submission_deadline'],
+    nested: ['hackathon_setting', 'settings', 'hackathon_settings'],
+  },
+  devpost: {
+    name: ['title', 'name'],
+    slug: ['url', 'slug', 'subdomain'],
+    start: ['start_date', 'startDate', 'start_at', 'open_date', 'submission_period_start'],
+    end: ['end_date', 'endDate', 'end_at', 'close_date', 'submission_period_end'],
+    regEnd: ['registration_deadline'],
+    subEnd: ['submission_deadline', 'submission_end_date', 'deadline'],
+    nested: [],
+  },
+  unstop: {
+    name: ['title', 'name', 'opportunity_title', 'competition_title', 'event_name', 'hackathon_name', 'heading'],
+    slug: ['public_url', 'seo_url', 'slug', 'url', 'id'],
+    start: ['start_date', 'startDate', 'start_time', 'festival_start_date', 'competition_start_date', 'event_start_date'],
+    end: ['end_date', 'endDate', 'end_time', 'festival_end_date', 'competition_end_date', 'event_end_date'],
+    regEnd: ['end_regn_dt', 'regn_end_date', 'registration_end_time', 'registrationEndTime', 'last_date_of_registration'],
+    subEnd: ['submission_deadline', 'deadline'],
+    nested: ['regnRequirements', 'regn_requirements', 'dates', 'timeline'],
   },
 };
-
-/* ================================================================== */
-/*  DEVPOST                                                           */
-/* ================================================================== */
-const devpost = {
-  name: 'Devpost',
-
-  parseResponse(json, pageUrl) {
-    const candidates = gatherCandidates(json);
-
-    for (const h of candidates) {
-      const name = first(h, 'title', 'name');
-      const spd = h.submission_period_dates ?? {};
-      const startTime = first(h, 'start_date', 'startDate', 'start_at', 'open_date') || spd.start;
-      const endTime = first(
-        h, 'end_date', 'endDate', 'end_at', 'submission_end_date', 'close_date',
-      ) || spd.end;
-
-      if (name && startTime && endTime) {
-        return mkEvent(name, startTime, endTime, pageUrl, 'devpost');
-      }
-    }
-    return null;
-  },
-};
-
-/* ================================================================== */
-/*  UNSTOP  (ultra-greedy — their API shapes vary a lot)              */
-/* ================================================================== */
-const unstop = {
-  name: 'Unstop',
-
-  parseResponse(json, pageUrl) {
-    const candidates = gatherCandidates(json);
-
-    for (const o of candidates) {
-      const name = first(
-        o,
-        'title', 'name', 'opportunity_title', 'competition_title',
-        'event_name', 'hackathon_name', 'heading',
-      );
-
-      const startTime = firstDate(o,
-        'start_date', 'start', 'startDate', 'start_time',
-        'registrationStartTime', 'registration_start_time',
-        'regn_start_date', 'start_regn_dt',
-        'festival_start_date', 'competition_start_date',
-        'event_start', 'event_start_date',
-      ) || deepDate(o, 'regnRequirements', 'start_regn_dt')
-        || deepDate(o, 'regn_requirements', 'start_regn_dt')
-        || deepDate(o, 'dates', 'start')
-        || deepDate(o, 'timeline', 'start');
-
-      const endTime = firstDate(o,
-        'end_date', 'end', 'endDate', 'end_time',
-        'registrationEndTime', 'registration_end_time',
-        'regn_end_date', 'end_regn_dt',
-        'festival_end_date', 'competition_end_date',
-        'event_end', 'event_end_date',
-        'deadline', 'submission_deadline',
-        'last_date_of_registration',
-      ) || deepDate(o, 'regnRequirements', 'end_regn_dt')
-        || deepDate(o, 'regn_requirements', 'end_regn_dt')
-        || deepDate(o, 'dates', 'end')
-        || deepDate(o, 'timeline', 'end');
-
-      if (name && (startTime || endTime)) {
-        return mkEvent(name, startTime, endTime || startTime, pageUrl, 'unstop');
-      }
-    }
-
-    // Last resort: deep-scan for any sub-object with name + date
-    const deep = deepScan(json);
-    if (deep) {
-      return { ...deep, url: pageUrl, source: 'network', platform: 'unstop' };
-    }
-
-    return null;
-  },
-};
-
-/* ================================================================== */
-/*  REGISTRY & EXPORTS                                                */
-/* ================================================================== */
-export const PLATFORMS = { devfolio, devpost, unstop };
 
 export function detectPlatform(url) {
-  if (!url) return null;
-  if (url.includes('devfolio.co')) return 'devfolio';
-  if (url.includes('devpost.com')) return 'devpost';
-  if (url.includes('unstop.com') || url.includes('dare2compete.com'))
-    return 'unstop';
-  return null;
+  const p = detectAny(url);
+  return FIELDS[p] ? p : null;
 }
 
-export function parseApiResponse(platformKey, json, pageUrl) {
-  const platform = PLATFORMS[platformKey];
-  if (!platform) return null;
-  try {
-    return platform.parseResponse(json, pageUrl);
-  } catch (err) {
-    console.debug(`[HPT] Parse error (${platformKey}):`, err);
-    return null;
-  }
-}
-
-/* ================================================================== */
-/*  SHARED HELPERS                                                    */
-/* ================================================================== */
-
-function first(obj, ...keys) {
+function first(obj, keys) {
   if (!obj || typeof obj !== 'object') return null;
   for (const k of keys) {
-    if (obj[k] != null && obj[k] !== '') return obj[k];
+    const v = obj[k];
+    if (v != null && v !== '' && typeof v !== 'object') return v;
   }
   return null;
 }
 
-function firstDate(obj, ...keys) {
-  const raw = first(obj, ...keys);
-  return raw ? normalizeTimestamp(raw) : null;
-}
-
-function deepDate(obj, wrapper, key) {
-  const w = obj?.[wrapper];
-  if (w && typeof w === 'object' && w[key] != null) {
-    return normalizeTimestamp(w[key]);
+function firstWithNested(obj, keys, nested) {
+  const direct = first(obj, keys);
+  if (direct != null) return direct;
+  for (const n of nested) {
+    const v = first(obj?.[n], keys);
+    if (v != null) return v;
   }
   return null;
 }
 
-function mkEvent(name, startTime, endTime, pageUrl, platform) {
+/** Collect every plain object (depth ≤ 6, max 800) that has a name-like key. */
+function gatherCandidates(json, nameKeys) {
+  const out = [];
+  const seen = new Set();
+  (function walk(node, depth) {
+    if (!node || typeof node !== 'object' || depth > 6 || out.length > 800 || seen.has(node)) return;
+    seen.add(node);
+    if (Array.isArray(node)) { node.forEach((n) => walk(n, depth + 1)); return; }
+    if (typeof first(node, nameKeys) === 'string') out.push(node);
+    for (const v of Object.values(node)) if (v && typeof v === 'object') walk(v, depth + 1);
+  })(json, 0);
+  return out;
+}
+
+/** "Oct 03 - Nov 25, 2025" / "Oct 03 - 25, 2025" → { start, end } (Devpost). */
+export function parseDevpostRange(s) {
+  if (typeof s !== 'string') return {};
+  const m = s.match(/([A-Za-z]{3,9})\s+(\d{1,2})(?:,\s*(\d{4}))?\s*[-–]\s*(?:([A-Za-z]{3,9})\s+)?(\d{1,2}),\s*(\d{4})/);
+  if (!m) return {};
+  const [, m1, d1, y1, m2, d2, y2] = m;
+  const start = new Date(`${m1} ${d1}, ${y1 || y2} 00:00`);
+  const end = new Date(`${m2 || m1} ${d2}, ${y2} 23:59`);
   return {
-    name: String(name),
-    startTime: normalizeTimestamp(startTime),
-    endTime: normalizeTimestamp(endTime),
-    url: pageUrl,
-    source: 'network',
-    platform,
+    start: Number.isNaN(start.getTime()) ? null : start.toISOString(),
+    end: Number.isNaN(end.getTime()) ? null : end.toISOString(),
   };
 }
 
-function gatherCandidates(json) {
-  const seen = new Set();
-  const result = [];
-
-  function add(obj) {
-    if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return;
-    if (seen.has(obj)) return;
-    seen.add(obj);
-    result.push(obj);
+function score(obj, f, pageKey, hint) {
+  let s = 0;
+  const keyId = pageKey ? pageKey.split(':')[1] : null;
+  const slugVals = f.slug.map((k) => obj[k]).filter((v) => v != null && typeof v !== 'object').map((v) => String(v).toLowerCase());
+  if (keyId && slugVals.some((v) => v === keyId || v.endsWith(`-${keyId}`) || v.includes(`/${keyId}`) || v.includes(`${keyId}.`) || v.includes(`-${keyId}/`))) s += 10;
+  if (hint) {
+    const hintTokens = new Set(hint.split(/[^a-z0-9]+/).filter(Boolean));
+    const compactHint = hint.replace(/[^a-z0-9]/g, '');
+    const name = String(first(obj, f.name) || '');
+    const compactName = nameTokens(name).join('');
+    if (compactName && (compactHint === compactName || compactHint.startsWith(compactName) || compactName.startsWith(compactHint))) s += 6;
+    const overlap = nameTokens(name).filter((t) => hintTokens.has(t)).length;
+    s += Math.min(overlap, 4);
   }
-
-  add(json);
-  add(json?.data);
-  add(json?.data?.data);
-  add(json?.result);
-  add(json?.result?.data);
-  add(json?.opportunity);
-  add(json?.data?.opportunity);
-  add(json?.hackathon);
-  add(json?.data?.hackathon);
-
-  if (Array.isArray(json?.data?.data)) {
-    json.data.data.forEach((item) => add(item));
-  }
-  if (Array.isArray(json?.data)) {
-    json.data.forEach((item) => add(item));
-  }
-
-  return result;
+  return s;
 }
 
-function deepScan(obj, depth = 0) {
-  if (!obj || typeof obj !== 'object' || depth > 3) return null;
-  if (Array.isArray(obj)) {
-    for (const item of obj) {
-      const r = deepScan(item, depth + 1);
-      if (r) return r;
-    }
+function toDraft(obj, f, platform, pageUrl) {
+  let start = toIso(firstWithNested(obj, f.start, f.nested));
+  let end = toIso(firstWithNested(obj, f.end, f.nested));
+  let sub = toIso(firstWithNested(obj, f.subEnd, f.nested));
+  const reg = toIso(firstWithNested(obj, f.regEnd, f.nested));
+  if (platform === 'devpost' && obj.submission_period_dates) {
+    const r = parseDevpostRange(obj.submission_period_dates);
+    start = start || r.start;
+    sub = sub || r.end;
+    end = end || r.end;
+  }
+  const loc = obj.displayed_location?.location || obj.location || obj.city || obj.address_with_country_logo?.city || null;
+  let mode = null;
+  if (obj.is_online === true || /online/i.test(String(obj.region || obj.mode || ''))) mode = 'online';
+  else if (obj.is_online === false || /offline/i.test(String(obj.region || obj.mode || ''))) mode = 'offline';
+  return {
+    name: String(first(obj, f.name)).trim(),
+    url: pageUrl,
+    platform,
+    source: 'network',
+    startTime: start,
+    endTime: end || sub,
+    registrationDeadline: reg,
+    submissionDeadline: sub,
+    mode,
+    location: typeof loc === 'string' ? loc.slice(0, 120) : null,
+    description: typeof (obj.tagline || obj.short_description) === 'string' ? (obj.tagline || obj.short_description).slice(0, 500) : null,
+    image: typeof (obj.cover_img || obj.thumbnail_url || obj.banner_mobile?.image_url) === 'string'
+      ? (obj.cover_img || obj.thumbnail_url || obj.banner_mobile?.image_url) : null,
+  };
+}
+
+/**
+ * @returns {object|null} hackathon draft, or null when the response is not
+ *   confidently about THIS page's hackathon.
+ */
+export function parseApiResponse(platformKey, json, pageUrl) {
+  const f = FIELDS[platformKey];
+  if (!f || !json || typeof json !== 'object') return null;
+  const pageKey = canonicalKey(pageUrl);
+  if (!pageKey) return null; // listing/search/profile page — never save
+  const hint = slugHint(pageUrl);
+  try {
+    const cands = gatherCandidates(json, f.name)
+      .map((o) => ({ o, d: toDraft(o, f, platformKey, pageUrl) }))
+      .filter(({ d }) => d.name && (d.startTime || d.endTime || d.registrationDeadline));
+    if (!cands.length) return null;
+    const ranked = cands.map((c) => ({ ...c, s: score(c.o, f, pageKey, hint) })).sort((a, b) => b.s - a.s);
+    const best = ranked[0];
+    if (best.s <= 0) return null; // nothing matches this page's slug/id
+    if (ranked[1] && ranked[1].s === best.s && ranked[1].d.name !== best.d.name) return null; // ambiguous
+    return best.d;
+  } catch (err) {
+    console.debug(`[HPT] parse error (${platformKey})`, err);
     return null;
   }
-
-  const nameKeys = ['title', 'name', 'opportunity_title', 'heading'];
-  const endKeys = [
-    'end_date', 'endDate', 'deadline', 'end_regn_dt',
-    'submission_deadline', 'last_date_of_registration',
-  ];
-
-  const name = first(obj, ...nameKeys);
-  const end = first(obj, ...endKeys);
-
-  if (name && end && typeof name === 'string' && name.length > 3) {
-    const startKeys = ['start_date', 'startDate', 'start_regn_dt', 'start'];
-    const start = first(obj, ...startKeys);
-    return {
-      name: String(name),
-      startTime: start ? normalizeTimestamp(start) : normalizeTimestamp(end),
-      endTime: normalizeTimestamp(end),
-    };
-  }
-
-  for (const key of Object.keys(obj)) {
-    if (typeof obj[key] === 'object') {
-      const r = deepScan(obj[key], depth + 1);
-      if (r) return r;
-    }
-  }
-  return null;
-}
-
-function normalizeTimestamp(value) {
-  if (!value) return null;
-  if (typeof value === 'string') {
-    const d = new Date(value);
-    if (!isNaN(d.getTime())) return d.toISOString();
-  }
-  if (typeof value === 'number') {
-    const ms = value < 1e12 ? value * 1000 : value;
-    const d = new Date(ms);
-    if (!isNaN(d.getTime())) return d.toISOString();
-  }
-  return String(value);
 }

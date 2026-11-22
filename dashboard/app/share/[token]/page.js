@@ -2,92 +2,52 @@
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { resolveShareLink } from '@/lib/firestore';
-import Timeline from '@/components/Timeline';
+import Link from 'next/link';
+import { Countdown, PlatformBadge, Spinner, StageBadge } from '@/components/ui';
+import { fmtDate, nextDeadline } from '@/lib/client/format';
 
 export default function SharePage() {
-  const params = useParams();
-  const token = params.token;
-
-  const [state, setState] = useState('loading');
-  const [events, setEvents] = useState([]);
-
+  const { token } = useParams();
+  const [data, setData] = useState(null);
+  const [err, setErr] = useState('');
   useEffect(() => {
-    if (!token) { setState('error'); return; }
-    resolveShareLink(token)
-      .then((r) => {
-        if (!r) { setState('expired'); return; }
-        setEvents(r.events);
-        setState(r.events.length > 0 ? 'ready' : 'expired');
-      })
-      .catch(() => setState('error'));
+    const load = () => fetch(`/api/public/${token}`).then(async (r) => { const d = await r.json(); if (!r.ok) throw new Error(d.error); setData(d); }).catch((e) => setErr(e.message));
+    load();
+    const id = setInterval(load, 60000);
+    return () => clearInterval(id);
   }, [token]);
 
-  useEffect(() => {
-    if (state !== 'ready') return;
-    const id = setInterval(() => {
-      resolveShareLink(token).then((r) => { if (r?.events) setEvents(r.events); });
-    }, 60_000);
-    return () => clearInterval(id);
-  }, [state, token]);
+  const list = (data?.hackathons || []).filter((h) => h.stage !== 'done')
+    .sort((a, b) => (new Date(nextDeadline(a)?.at || 8.64e15)) - (new Date(nextDeadline(b)?.at || 8.64e15)));
 
   return (
-    <main className="min-h-screen flex flex-col relative">
-      {/* ── HEADER (CENTRALIZED) ─────────────────────────── */}
-      <header className="max-w-4xl mx-auto px-8 pt-24 pb-16 text-center">
-        <img 
-          src="/icons/icon-128.png" 
-          alt="HPT Logo" 
-          className="w-16 h-16 mx-auto mb-6 rounded-2xl object-cover shadow-2xl border border-white/[0.06]"
-        />
-        <h1 className="text-4xl font-bold tracking-tight text-[#f0f0f0] mb-3">
-          Hackathon Pipeline Dashboard
-        </h1>
-        <p className="text-sm font-medium tracking-[0.12em] uppercase text-[#666]">
-          Shared Timeline
-        </p>
-      </header>
-
-      {/* ── CONTENT ────────────────────────────────────────── */}
-      <div className="flex-1 max-w-4xl w-full mx-auto px-8 pb-32">
-        {state === 'loading' && (
-          <div className="flex flex-col items-center justify-center py-32">
-            <div className="spinner mb-6" />
-            <p className="text-[#444] text-sm">Loading timeline…</p>
+    <main className="max-w-3xl mx-auto px-4 py-10 sm:py-16">
+      {!data && !err && <Spinner label="Loading timeline…" />}
+      {err && <div className="card p-8 text-center"><p className="font-semibold text-lg">Link unavailable</p><p className="text-muted mt-1">{err}</p><Link href="/" className="btn mt-5">Home</Link></div>}
+      {data && (
+        <>
+          <p className="section-title">Shared timeline</p>
+          <h1 className="text-3xl font-bold tracking-tight mt-1 mb-8">{data.name}</h1>
+          <div className="flex flex-col gap-3">
+            {list.length === 0 && <p className="text-muted">Nothing on the board right now.</p>}
+            {list.map((h) => {
+              const nd = nextDeadline(h);
+              return (
+                <a key={h.id} href={h.url || undefined} target="_blank" rel="noopener noreferrer" className="card card-hover p-4 flex items-center gap-3">
+                  <PlatformBadge platform={h.platform} size={36} />
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold truncate">{h.name}</p>
+                    <p className="text-[12.5px] text-muted">{nd ? `${nd.label} · ${fmtDate(nd.at)}` : 'No upcoming dates'}</p>
+                  </div>
+                  <StageBadge stage={h.stage} />
+                  {nd && <Countdown at={nd.at} className="hidden sm:inline text-[13px]" />}
+                </a>
+              );
+            })}
           </div>
-        )}
-
-        {state === 'error' && (
-          <div className="text-center py-32 glass-card">
-            <p className="text-5xl mb-6 opacity-20">✕</p>
-            <h2 className="text-xl font-semibold mb-3 text-[#e5e5e5]">Invalid Link</h2>
-            <p className="text-[#444] text-sm max-w-sm mx-auto">This share link doesn&apos;t exist or has been corrupted.</p>
-          </div>
-        )}
-
-        {state === 'expired' && (
-          <div className="text-center py-32 glass-card">
-            <p className="text-5xl mb-6 opacity-20">⏱</p>
-            <h2 className="text-xl font-semibold mb-3 text-[#e5e5e5]">Link Expired</h2>
-            <p className="text-[#444] text-sm max-w-sm mx-auto">Events are removed 48 hours after ending.</p>
-          </div>
-        )}
-
-        {state === 'ready' && (
-          <Timeline events={events} />
-        )}
-      </div>
-
-      {/* ── FOOTER ─────────────────────────────────────────── */}
-      <footer className="border-t border-white/[0.03]">
-        <div className="max-w-4xl mx-auto px-8 py-8 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <img src="/icons/icon-128.png" alt="HPT" className="w-6 h-6 rounded-md" />
-            <span className="text-[11px] text-[#333]">Pipeline Tracker</span>
-          </div>
-          <p className="text-[10px] text-[#222]">Read-only shared view</p>
-        </div>
-      </footer>
+          <p className="text-[12px] text-faint mt-10">Read-only view · Pipeline</p>
+        </>
+      )}
     </main>
   );
 }

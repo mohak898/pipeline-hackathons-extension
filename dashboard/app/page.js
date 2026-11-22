@@ -1,174 +1,133 @@
-/* v3.1 — Premium SaaS Landing (Centered & Clean) */
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { Field, Icon } from '@/components/ui';
+import { rememberWorkspace, rememberedWorkspaces } from '@/lib/client/workspace';
+
+const EXTENSION_LINK = process.env.NEXT_PUBLIC_EXTENSION_LINK || 'https://github.com/mohak898/pipeline-hackathons-extension#6-install-the-chrome-extension';
+
+const FEATURES = [
+  ['trophy', 'One pipeline, zero duplicates', 'Every hackathon from Devfolio, Devpost, Unstop or any custom website lands in one board — merged by canonical URL and name + date.'],
+  ['puzzle', 'Extension on one laptop is enough', 'The lead’s extension captures pages passively. Everyone else just opens the dashboard — add, edit and plan from any device.'],
+  ['bell', 'Reminders that reach everyone', 'Personal action center, Discord/Slack pings, a calendar feed for phones, and "who hasn’t registered yet" nudges.'],
+  ['bulb', 'Ideate → build → submit', 'Idea board with votes, projects with task boards, threads on every hackathon and a team chat.'],
+];
 
 export default function Home() {
   const router = useRouter();
-  const [token, setToken] = useState('');
+  const [mine, setMine] = useState([]);
+  const [form, setForm] = useState({ name: '', leaderName: '' });
+  const [invite, setInvite] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
 
-  const handleGo = () => {
-    const t = token.trim();
-    if (!t) return;
-    const match = t.match(/\/share\/([a-zA-Z0-9_-]+)/);
-    router.push(`/share/${match ? match[1] : t}`);
-  };
+  useEffect(() => { setMine(rememberedWorkspaces()); }, []);
+
+  async function create(e) {
+    e.preventDefault();
+    setBusy(true); setErr('');
+    try {
+      const res = await fetch('/api/workspaces', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      rememberWorkspace(data.workspaceId, data.workspaceName);
+      router.push(`/w/${data.workspaceId}?welcome=1`);
+    } catch (e2) {
+      setErr(e2.message || 'Could not create the workspace');
+      setBusy(false);
+    }
+  }
+
+  function openInvite(e) {
+    e.preventDefault();
+    const v = invite.trim();
+    try {
+      const u = new URL(v);
+      router.push(u.pathname + u.search);
+    } catch {
+      setErr('Paste the full invite link your team lead shared (it starts with https://)');
+    }
+  }
 
   return (
-    <main className="min-h-screen flex flex-col">
-      {/* ── NAV ────────────────────────────────────────────── */}
-      <nav className="glass-nav sticky top-0 z-50">
-        <div className="max-w-4xl mx-auto px-8 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <img 
-              src="/icons/icon-128.png" 
-              alt="HPT Logo" 
-              className="w-8 h-8 rounded-lg object-cover bg-[#0a0a0a] border border-white/[0.04]" 
-            />
-            <span className="text-[13px] font-semibold tracking-tight text-[#e5e5e5]">Pipeline Tracker</span>
-          </div>
-          <div className="flex items-center">
-            <a
-              href={process.env.NEXT_PUBLIC_EXTENSION_LINK || '#'}
-              className="btn-primary px-5 py-2 text-[13px]"
-            >
-              Download Extension
-            </a>
-          </div>
+    <main className="min-h-dvh flex flex-col">
+      <nav className="border-b border-line">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
+          <Link href="/" className="flex items-center gap-2.5 font-semibold">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/icons/icon-48.png" alt="" width={26} height={26} className="rounded-md" />
+            Pipeline
+          </Link>
+          <a href={EXTENSION_LINK} className="btn btn-sm" target="_blank" rel="noopener noreferrer"><Icon name="puzzle" size={14} />Get the extension</a>
         </div>
       </nav>
 
-      {/* ── HERO ───────────────────────────────────────────── */}
-      <section className="flex-1 flex flex-col items-center justify-center px-8 py-24 sm:py-32">
-        <div className="max-w-2xl text-center mb-16">
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-white/[0.06] bg-white/[0.02] text-[11px] text-[#666] font-medium tracking-wider uppercase mb-8">
-            <span className="live-dot" />
-            Now tracking Devfolio · Devpost · Unstop
-          </div>
-
-          <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight leading-[1.1] text-[#f0f0f0] mb-6">
-            Never Miss a Deadline.<br />
-            <span className="text-[#3b82f6]">Pipeline. </span>
-            <span className="text-[#22c55e]">Visualized.</span>
+      <section className="max-w-6xl w-full mx-auto px-4 sm:px-6 py-12 sm:py-20 grid lg:grid-cols-[1.1fr_1fr] gap-10 lg:gap-16 items-start">
+        <div>
+          <span className="badge badge-green mb-5"><span className="live-dot" />Team workspace for hackathon squads</span>
+          <h1 className="text-[34px] sm:text-5xl font-bold tracking-tight leading-[1.08]">
+            Every hackathon, every deadline,<br className="hidden sm:block" /> <span className="text-accent">the whole team</span> in sync.
           </h1>
-
-          <p className="text-base sm:text-lg text-[#555] leading-relaxed max-w-lg mx-auto mb-12">
-            Your entire hackathon pipeline, centralized and visualized. Passively tracks deadlines as you browse — zero config, zero manual entry.
+          <p className="text-muted text-base sm:text-lg mt-5 max-w-xl">
+            The lead’s browser extension quietly captures hackathons as you browse. Your team plans, ideates and builds in one shared workspace — no extension needed for them.
           </p>
 
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <a
-              href={process.env.NEXT_PUBLIC_EXTENSION_LINK || '#'}
-              className="btn-primary"
-            >
-              Get Extension
-            </a>
+          <div className="grid sm:grid-cols-2 gap-3 mt-10">
+            {FEATURES.map(([icon, title, body]) => (
+              <div key={title} className="card p-4">
+                <span className="w-8 h-8 rounded-lg bg-surface-3 text-accent inline-flex items-center justify-center mb-3"><Icon name={icon} /></span>
+                <p className="font-semibold text-[14px]">{title}</p>
+                <p className="text-muted text-[13px] mt-1">{body}</p>
+              </div>
+            ))}
           </div>
         </div>
 
-        {/* ── SHARED LINK (INPUT BOX) RIGHT BELOW HERO ───────── */}
-        <div id="shared" className="glass-card w-full max-w-xl mx-auto p-10 text-center border-white/[0.08] shadow-2xl relative z-10 hidden sm:block mb-8">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-[#22c55e] mb-3">Team Links</p>
-          <h2 className="text-xl font-bold tracking-tight text-[#f0f0f0] mb-2">
-            Have a team link?
-          </h2>
-          <p className="text-[#666] text-[13px] mb-6">Paste your shared token directly to access the dashboard timeline.</p>
-
-          <div className="flex gap-3 max-w-md mx-auto">
-            <input
-              type="text"
-              className="share-input flex-1 bg-white/10 placeholder-white/30 text-white border-white/20 focus:border-[#22c55e] focus:bg-white/[0.15] transition-colors"
-              placeholder="Paste token or link…"
-              value={token}
-              onChange={(e) => setToken(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleGo()}
-            />
-            <button onClick={handleGo} className="btn-primary px-6 shrink-0 shadow-none">
-              Go
-            </button>
-          </div>
-        </div>
-
-        {/* Mobile Input Container */}
-        <div className="w-full max-w-md mx-auto text-center sm:hidden mb-8">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-[#22c55e] mb-2">Team Links</p>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              className="share-input flex-1 bg-white/10 placeholder-white/30 text-white border-white/20 focus:border-[#22c55e]"
-              placeholder="Paste token…"
-              value={token}
-              onChange={(e) => setToken(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleGo()}
-            />
-            <button onClick={handleGo} className="btn-primary px-4 shrink-0 shadow-none">
-              Go
-            </button>
-          </div>
-        </div>
-
-      </section>
-
-      {/* ── FEATURES ───────────────────────────────────────── */}
-      <section id="features" className="px-8 py-24 border-t border-white/[0.03]">
-        <div className="max-w-4xl mx-auto text-center">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-[#444] mb-4">Features</p>
-          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-[#f0f0f0] mb-16 mx-auto">
-            Built for speed. Designed for teams.
-          </h2>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
-            <div className="glass-card p-8 flex flex-col items-center">
-              <div className="feature-icon text-xl text-[#e5e5e5] mx-auto">🕵️</div>
-              <h3 className="text-[14px] font-semibold text-[#e5e5e5] mb-2 text-center">Stealth Extraction</h3>
-              <p className="text-[13px] text-[#555] leading-relaxed text-center">
-                Intercepts API responses smoothly.
-              </p>
+        <div className="flex flex-col gap-4 lg:sticky lg:top-6">
+          {mine.length > 0 && (
+            <div className="card p-5">
+              <p className="section-title mb-3">Your workspaces</p>
+              <div className="flex flex-col gap-1.5">
+                {mine.map((w) => (
+                  <Link key={w.id} href={`/w/${w.id}`} className="card-hover flex items-center justify-between rounded-[10px] border border-line px-3 py-2.5">
+                    <span className="font-medium">{w.name}</span><Icon name="up" className="rotate-90 text-faint" />
+                  </Link>
+                ))}
+              </div>
             </div>
-            <div className="glass-card p-8 flex flex-col items-center">
-              <div className="feature-icon text-xl text-[#3b82f6] mx-auto">☁️</div>
-              <h3 className="text-[14px] font-semibold text-[#e5e5e5] mb-2 text-center">Cloud Sync</h3>
-              <p className="text-[13px] text-[#555] leading-relaxed text-center">
-                Globally synced and up-to-date.
-              </p>
+          )}
+
+          <form onSubmit={create} className="card p-5 flex flex-col gap-3.5">
+            <div>
+              <p className="font-semibold text-[15px]">Start a team workspace</p>
+              <p className="text-muted text-[13px]">You’ll be the team lead. Invite teammates with a link.</p>
             </div>
-            <div className="glass-card p-8 flex flex-col items-center">
-              <div className="feature-icon text-xl text-[#22c55e] mx-auto">⏱️</div>
-              <h3 className="text-[14px] font-semibold text-[#e5e5e5] mb-2 text-center">Live Timers</h3>
-              <p className="text-[13px] text-[#555] leading-relaxed text-center">
-                Monospace tabular numbers tick smoothly.
-              </p>
+            <Field label="Team / workspace name">
+              <input className="input" required maxLength={80} placeholder="e.g. Hikity Hackers" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+            </Field>
+            <Field label="Your name">
+              <input className="input" required maxLength={60} placeholder="e.g. Asha" value={form.leaderName} onChange={(e) => setForm({ ...form, leaderName: e.target.value })} />
+            </Field>
+            <button className="btn btn-primary h-10" disabled={busy}>{busy ? 'Creating…' : 'Create workspace'}</button>
+          </form>
+
+          <form onSubmit={openInvite} className="card p-5 flex flex-col gap-3">
+            <p className="font-semibold text-[15px]">Got an invite link?</p>
+            <div className="flex gap-2">
+              <input className="input" placeholder="https://…/join/…" value={invite} onChange={(e) => setInvite(e.target.value)} />
+              <button className="btn">Join</button>
             </div>
-            <div className="glass-card p-8 flex flex-col items-center">
-              <div className="feature-icon text-xl text-[#fb923c] mx-auto">🔗</div>
-              <h3 className="text-[14px] font-semibold text-[#e5e5e5] mb-2 text-center">Share Links</h3>
-              <p className="text-[13px] text-[#555] leading-relaxed text-center">
-                One link to sync your whole team.
-              </p>
-            </div>
-          </div>
+          </form>
+          {err && <p className="text-danger text-[13px]" role="alert">{err}</p>}
         </div>
       </section>
 
-      {/* ── FOOTER ─────────────────────────────────────────── */}
-      <footer className="border-t border-white/[0.03] mt-auto">
-        <div className="max-w-4xl mx-auto px-8 py-10 flex flex-col sm:flex-row items-center justify-between gap-6">
-          <div className="flex items-center gap-3">
-            <img 
-              src="/icons/icon-128.png" 
-              alt="HPT Logo" 
-              className="w-6 h-6 rounded-md object-contain bg-[#0a0a0a]" 
-            />
-            <span className="text-[12px] font-semibold text-[#555]">Hackathon Pipeline Tracker</span>
-          </div>
-          <div className="flex items-center gap-6">
-            <a href="#" className="text-[11px] text-[#444] hover:text-[#e5e5e5]">About HPT</a>
-            <a href="#" className="text-[11px] text-[#444] hover:text-[#e5e5e5]">Privacy</a>
-          </div>
-          <p className="text-[11px] text-[#333]">
-            © {new Date().getFullYear()} HPT · Built for Hikity
-          </p>
+      <footer className="mt-auto border-t border-line">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 flex flex-wrap gap-3 items-center justify-between text-xs text-faint">
+          <span>Hackathon Pipeline Tracker · built for teams that ship</span>
+          <span>No accounts — access is by invite link, scoped per workspace.</span>
         </div>
       </footer>
     </main>

@@ -2,49 +2,99 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=360" />
   <title>Hackathon Pipeline Tracker</title>
   <link rel="stylesheet" href="popup.css" />
 </head>
 <body>
-  <!-- Header -->
-  <header class="header">
-    <div class="header__brand">
-      <img src="../icons/icon-48.png" alt="HPT" class="header__icon" />
-      <div>
-        <h1 class="header__title">Pipeline Tracker</h1>
-        <p class="header__subtitle">Hackathon deadlines, auto-tracked</p>
-      </div>
+  <header class="top">
+    <img src="../icons/icon-48.png" alt="" class="top__logo" />
+    <div class="top__text">
+      <h1 class="top__title">Pipeline Tracker</h1>
+      <p id="ws-label" class="top__sub">Not connected</p>
     </div>
+    <a id="open-dashboard" class="btn btn--ghost btn--sm" target="_blank" rel="noopener" hidden>Dashboard ↗</a>
   </header>
 
-  <!-- Event List -->
-  <main class="main">
-    <div id="event-list" class="event-list">
-      <!-- Populated by popup.js -->
-    </div>
+  <nav class="tabs" role="tablist">
+    <button class="tab is-active" data-tab="pipeline" role="tab">Pipeline</button>
+    <button class="tab" data-tab="page" role="tab">This page</button>
+    <button class="tab" data-tab="settings" role="tab">Settings</button>
+  </nav>
 
-    <!-- Empty State -->
-    <div id="empty-state" class="empty-state" style="display: none;">
-      <div class="empty-state__icon">📡</div>
-      <p class="empty-state__text">No hackathons tracked yet.</p>
-      <p class="empty-state__hint">Visit a <strong>Devfolio</strong>, <strong>Devpost</strong>, or <strong>Unstop</strong> hackathon page to start tracking.</p>
-    </div>
+  <main>
+    <!-- PIPELINE -->
+    <section id="tab-pipeline" class="panel">
+      <div id="banner" class="banner" hidden></div>
+      <ul id="list" class="list"></ul>
+      <div id="empty" class="empty" hidden>
+        <p class="empty__title">Nothing tracked yet</p>
+        <p class="empty__text">Open a hackathon on Devfolio, Devpost or Unstop and it's captured automatically — or use <b>This page</b> on any other website.</p>
+      </div>
+      <div class="panel__foot">
+        <span id="sync-status" class="muted small"></span>
+        <button id="btn-refresh" class="btn btn--ghost btn--sm">Refresh</button>
+      </div>
+    </section>
+
+    <!-- THIS PAGE -->
+    <section id="tab-page" class="panel" hidden>
+      <p id="page-status" class="muted small">Reading this page…</p>
+      <form id="page-form" class="form" hidden>
+        <label class="field"><span>Name</span><input name="name" required maxlength="160" /></label>
+        <label class="field"><span>Link</span><input name="url" required /></label>
+        <div class="grid2">
+          <label class="field"><span>Registration closes</span><input type="datetime-local" name="registrationDeadline" /></label>
+          <label class="field"><span>Hacking starts</span><input type="datetime-local" name="startTime" /></label>
+          <label class="field"><span>Submission due</span><input type="datetime-local" name="submissionDeadline" /></label>
+          <label class="field"><span>Event ends</span><input type="datetime-local" name="endTime" /></label>
+        </div>
+        <div class="grid2">
+          <label class="field"><span>Mode</span>
+            <select name="mode">
+              <option value="">Unknown</option>
+              <option value="online">Online</option>
+              <option value="offline">In person</option>
+              <option value="hybrid">Hybrid</option>
+            </select>
+          </label>
+          <label class="field" id="stage-field" hidden><span>Stage</span>
+            <select name="stage">
+              <option value="discovered">Inbox</option>
+              <option value="shortlisted" selected>Shortlisted</option>
+              <option value="registered">Registered</option>
+            </select>
+          </label>
+        </div>
+        <label class="check"><input type="checkbox" name="registered" /> I've registered for this one</label>
+        <p id="page-hint" class="muted small"></p>
+        <button type="submit" class="btn btn--primary btn--block">Save to pipeline</button>
+      </form>
+    </section>
+
+    <!-- SETTINGS -->
+    <section id="tab-settings" class="panel" hidden>
+      <div id="conn-on" hidden>
+        <div class="card">
+          <p class="muted small">Connected to</p>
+          <p id="conn-ws" class="strong"></p>
+          <p id="conn-who" class="muted small"></p>
+          <p id="conn-err" class="error small" hidden></p>
+        </div>
+        <button id="btn-disconnect" class="btn btn--ghost btn--block">Disconnect</button>
+      </div>
+      <form id="conn-form" class="form">
+        <p class="small">Connect to your team's workspace so captures land on the shared dashboard. In the dashboard open <b>Settings → Extension</b>, create a token and paste the pairing string here.</p>
+        <label class="field"><span>Pairing string</span><textarea name="pairing" rows="3" placeholder="https://your-dashboard.app#hpt_…" required></textarea></label>
+        <p id="conn-msg" class="small" hidden></p>
+        <button type="submit" class="btn btn--primary btn--block">Connect workspace</button>
+      </form>
+      <hr />
+      <button id="btn-clear" class="btn btn--danger btn--block btn--sm">Clear local captures</button>
+      <p class="muted small center">Teammates don't need the extension — they use the dashboard.</p>
+    </section>
   </main>
 
-  <!-- Footer -->
-  <footer class="footer">
-    <button id="btn-share" class="btn btn--primary" title="Generate a share link for your team">
-      <span class="btn__icon">🔗</span> Share Timeline
-    </button>
-    <button id="btn-clear" class="btn btn--ghost" title="Clear all tracked events">
-      Clear All
-    </button>
-  </footer>
-
-  <!-- Toast -->
-  <div id="toast" class="toast" aria-live="polite"></div>
-
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script type="module" src="popup.js"></script>
 </body>
 </html>
